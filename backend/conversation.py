@@ -101,8 +101,9 @@ async def interview_turn(
 
     user_history = update_session(session_id, "user", transcript)
     completion = groq_client.chat.completions.create(
-    messages=user_history,
+        messages=user_history,
         model=LLM_MODEL,
+        max_tokens=150,
     )
     reply = ensure_exclamation(completion.choices[0].message.content.strip())
     update_session(session_id, "assistant", reply)

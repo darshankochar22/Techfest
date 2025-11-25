@@ -1,11 +1,30 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
-import { Video, VideoOff, Mic, MicOff, Monitor, MonitorOff, PhoneOff, Maximize2, Minimize2, Home, LayoutGrid } from "lucide-react"
+import { useState, useRef, useEffect, useMemo } from "react"
+import {
+  Video,
+  VideoOff,
+  Mic,
+  MicOff,
+  Monitor,
+  MonitorOff,
+  PhoneOff,
+  Maximize2,
+  Minimize2,
+  Home,
+  LayoutGrid,
+  Loader2,
+  RefreshCcw,
+  Volume2,
+  MessageSquare,
+  MessageSquareOff,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
+import { useInterviewSession } from "@/hooks/useInterviewSession"
 
 export function InterviewInterface() {
   const router = useRouter()
@@ -15,7 +34,8 @@ export function InterviewInterface() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [hasRemoteStream, setHasRemoteStream] = useState(false)
-  const [viewMode, setViewMode] = useState<"ai-big" | "user-big" | "split">("ai-big")
+  const [viewMode, setViewMode] = useState<"ai-big" | "user-big" | "split">("user-big")
+  const [showConversation, setShowConversation] = useState(false)
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null)
   const [peerConnection, setPeerConnection] = useState<RTCPeerConnection | null>(null)
@@ -24,6 +44,17 @@ export function InterviewInterface() {
   const localVideoRef = useRef<HTMLVideoElement>(null)
   const remoteVideoRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const {
+    sessionId,
+    messages,
+    status,
+    error,
+    isRecording,
+    startRecording,
+    stopRecording,
+    resetSession,
+    backendUrl,
+  } = useInterviewSession()
 
   // Interviewer info
   const interviewerName = "AI Interviewer"
@@ -247,14 +278,14 @@ export function InterviewInterface() {
     }
   }
 
-  // Toggle audio
+  // Toggle audio - use interview session recording
   const toggleAudio = () => {
-    if (localStream) {
-      const audioTrack = localStream.getAudioTracks()[0]
-      if (audioTrack) {
-        audioTrack.enabled = !isAudioOn
-        setIsAudioOn(!isAudioOn)
-      }
+    if (isRecording) {
+      stopRecording()
+      setIsAudioOn(false)
+    } else {
+      startRecording()
+      setIsAudioOn(true)
     }
   }
 
@@ -360,6 +391,23 @@ export function InterviewInterface() {
       document.removeEventListener("fullscreenchange", handleFullscreenChange)
     }
   }, [])
+
+  const statusLabel = useMemo(() => {
+    switch (status) {
+      case "recording":
+        return "Listening… release the mic to send."
+      case "processing":
+        return "Pointer is thinking..."
+      case "error":
+        return error ?? "Something went wrong. Try again."
+      default:
+        return "Press the mic to speak with the interviewer."
+    }
+  }, [status, error])
+
+  const handleResetSession = () => {
+    resetSession()
+  }
 
   // End call handler
   const endCall = () => {
@@ -562,18 +610,18 @@ export function InterviewInterface() {
           {isVideoOn ? <Video className="w-6 h-6" /> : <VideoOff className="w-6 h-6" />}
         </Button>
 
-        {/* Audio toggle */}
+        {/* Audio toggle - uses interview recording */}
         <Button
           onClick={toggleAudio}
           size="lg"
           className={`rounded-full w-14 h-14 ${
-            isAudioOn
-              ? "bg-secondary text-secondary-foreground hover:bg-secondary/90"
-              : "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            isRecording
+              ? "bg-primary text-primary-foreground hover:bg-primary/90"
+              : "bg-secondary text-secondary-foreground hover:bg-secondary/90"
           }`}
-          aria-label={isAudioOn ? "Mute microphone" : "Unmute microphone"}
+          aria-label={isRecording ? "Stop recording" : "Start recording"}
         >
-          {isAudioOn ? <Mic className="w-6 h-6" /> : <MicOff className="w-6 h-6" />}
+          {isRecording ? <Mic className="w-6 h-6" /> : <MicOff className="w-6 h-6" />}
         </Button>
 
         {/* Screen share toggle */}
@@ -590,20 +638,31 @@ export function InterviewInterface() {
           {isScreenSharing ? <MonitorOff className="w-6 h-6" /> : <Monitor className="w-6 h-6" />}
         </Button>
 
-        {/* View mode toggle */}
+        {/* View mode toggle - switch between user big and AI big */}
         <Button
           onClick={() => {
-            const modes: ("ai-big" | "user-big" | "split")[] = ["ai-big", "user-big", "split"]
-            const currentIndex = modes.indexOf(viewMode)
-            const nextIndex = (currentIndex + 1) % modes.length
-            setViewMode(modes[nextIndex])
+            setViewMode(viewMode === "user-big" ? "ai-big" : "user-big")
           }}
           size="lg"
           className="rounded-full w-14 h-14 bg-secondary text-secondary-foreground hover:bg-secondary/90"
-          aria-label={`Switch view mode. Current: ${viewMode}`}
-          title={`View: ${viewMode === "ai-big" ? "AI Big" : viewMode === "user-big" ? "You Big" : "Split"}`}
+          aria-label={viewMode === "user-big" ? "Switch to AI view" : "Switch to your view"}
+          title={viewMode === "user-big" ? "Show AI big" : "Show you big"}
         >
           <LayoutGrid className="w-6 h-6" />
+        </Button>
+
+        {/* Conversation toggle */}
+        <Button
+          onClick={() => setShowConversation(!showConversation)}
+          size="lg"
+          className={`rounded-full w-14 h-14 ${
+            showConversation
+              ? "bg-primary text-primary-foreground hover:bg-primary/90"
+              : "bg-secondary text-secondary-foreground hover:bg-secondary/90"
+          }`}
+          aria-label={showConversation ? "Hide conversation" : "Show conversation"}
+        >
+          {showConversation ? <MessageSquareOff className="w-6 h-6" /> : <MessageSquare className="w-6 h-6" />}
         </Button>
 
         {/* Fullscreen toggle */}
@@ -637,9 +696,9 @@ export function InterviewInterface() {
             Camera Off
           </div>
         )}
-        {!isAudioOn && (
-          <div className="px-3 py-1.5 rounded-full bg-destructive/20 backdrop-blur-sm border border-destructive text-sm font-medium text-destructive">
-            Microphone Muted
+        {isRecording && (
+          <div className="px-3 py-1.5 rounded-full bg-primary/20 backdrop-blur-sm border border-primary text-sm font-medium text-primary">
+            Recording...
           </div>
         )}
         {isScreenSharing && (
@@ -648,6 +707,69 @@ export function InterviewInterface() {
           </div>
         )}
       </div>
+
+      {/* Conversation + backend controls */}
+      {showConversation && (
+        <div className="w-full px-6 pb-6">
+          <Card className="max-w-4xl mx-auto bg-background/80 border border-border">
+            <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <CardTitle className="text-lg">Pointer conversation</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  {statusLabel} <span className="block text-xs text-muted-foreground">Session ID: {sessionId}</span>
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Button variant="outline" size="lg" className="rounded-full h-14 w-14" onClick={resetSession}>
+                  <RefreshCcw className="w-5 h-5" />
+                </Button>
+              </div>
+            </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+              <Volume2 className="w-4 h-4" />
+              FastAPI backend: {backendUrl}
+            </div>
+            <div className="max-h-48 overflow-y-auto space-y-3 pr-2">
+              {messages.length === 0 && (
+                <div className="text-sm text-muted-foreground border border-dashed border-border rounded-xl p-4">
+                  Conversation will appear here after you speak. Pointer echoes your transcript, responds, and plays the
+                  spoken reply automatically.
+                </div>
+              )}
+              {messages.map((message) => (
+                <div key={message.id} className={`flex ${message.speaker === "user" ? "justify-end" : "justify-start"}`}>
+                  <div
+                    className={`max-w-[80%] rounded-2xl px-4 py-2 text-sm ${
+                      message.speaker === "user"
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-foreground"
+                    }`}
+                  >
+                    <p className="text-[10px] uppercase tracking-wide opacity-70 mb-1">
+                      {message.speaker === "user" ? "You" : "Pointer"}
+                    </p>
+                    <p>{message.text}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+            {status === "processing" && (
+              <div className="text-xs text-muted-foreground flex items-center gap-2">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Pointer is composing a response…
+              </div>
+            )}
+            {error && status === "error" && (
+              <p className="text-sm text-destructive flex items-center gap-2">
+                <MicOff className="w-4 h-4" />
+                {error}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+      )}
     </div>
   )
 }
