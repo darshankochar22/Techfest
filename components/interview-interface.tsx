@@ -12,7 +12,6 @@ import {
   Maximize2,
   Minimize2,
   Home,
-  LayoutGrid,
   Loader2,
   RefreshCcw,
   Volume2,
@@ -34,7 +33,6 @@ export function InterviewInterface() {
   const [isFullscreen, setIsFullscreen] = useState(false)
   const [isConnected, setIsConnected] = useState(false)
   const [hasRemoteStream, setHasRemoteStream] = useState(false)
-  const [viewMode, setViewMode] = useState<"ai-big" | "user-big" | "split">("user-big")
   const [showConversation, setShowConversation] = useState(false)
   const [localStream, setLocalStream] = useState<MediaStream | null>(null)
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null)
@@ -43,7 +41,26 @@ export function InterviewInterface() {
 
   const localVideoRef = useRef<HTMLVideoElement>(null)
   const remoteVideoRef = useRef<HTMLVideoElement>(null)
+  const cameraPreviewRef = useRef<HTMLVideoElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
+  const screenShareVideoRef = useRef<HTMLVideoElement>(null)
+  const playVideoSafely = async (element: HTMLVideoElement | null) => {
+    if (!element) return
+    try {
+      await element.play()
+    } catch (error) {
+      console.warn("Unable to auto-play video element:", error)
+    }
+  }
+  useEffect(() => {
+    if (!screenShareVideoRef.current) return
+    if (screenStream && isScreenSharing) {
+      screenShareVideoRef.current.srcObject = screenStream
+      playVideoSafely(screenShareVideoRef.current)
+    } else {
+      screenShareVideoRef.current.srcObject = null
+    }
+  }, [screenStream, isScreenSharing])
   const {
     sessionId,
     messages,
@@ -129,8 +146,8 @@ export function InterviewInterface() {
               }
             }
 
-            ws.onerror = (error) => {
-              console.error("WebSocket error:", error)
+            ws.onerror = () => {
+              // Silently handle WebSocket errors without noisy console output
               setIsConnected(false)
             }
 
@@ -240,6 +257,12 @@ export function InterviewInterface() {
     }
   }, [])
 
+  useEffect(() => {
+    if (cameraPreviewRef.current && localStream) {
+      cameraPreviewRef.current.srcObject = localStream
+    }
+  }, [localStream])
+
   // WebRTC handlers
   const handleOffer = async (offer: RTCSessionDescriptionInit) => {
     if (!peerConnection) return
@@ -265,6 +288,44 @@ export function InterviewInterface() {
   const handleIceCandidate = async (candidate: RTCIceCandidateInit) => {
     if (!peerConnection) return
     await peerConnection.addIceCandidate(new RTCIceCandidate(candidate))
+  }
+
+  // Centralized helper to cleanly stop screen sharing from any path
+  const stopScreenShare = async () => {
+    if (!screenStream && !isScreenSharing) return
+
+    // Restore camera track in peer connection
+    if (peerConnection && localStream) {
+      const cameraTrack = localStream.getVideoTracks()[0]
+      const sender = peerConnection
+        .getSenders()
+        .find((s) => s.track && s.track.kind === "video")
+      if (sender && cameraTrack) {
+        try {
+          await sender.replaceTrack(cameraTrack)
+        } catch (err) {
+          console.warn("Failed to restore camera track after screen share:", err)
+        }
+      }
+    }
+
+    // Stop any active display tracks
+    if (screenStream) {
+      screenStream.getTracks().forEach((track) => track.stop())
+      setScreenStream(null)
+    }
+
+    // Clear local preview and flags
+    if (screenShareVideoRef.current) {
+      screenShareVideoRef.current.srcObject = null
+    }
+    setIsScreenSharing(false)
+
+    // Ensure the normal local camera preview is visible again
+    if (localVideoRef.current && localStream) {
+      localVideoRef.current.srcObject = localStream
+      await playVideoSafely(localVideoRef.current)
+    }
   }
 
   // Toggle video
@@ -293,14 +354,21 @@ export function InterviewInterface() {
   const toggleScreenShare = async () => {
     try {
       if (!isScreenSharing) {
+        const displayVideoConstraints: MediaTrackConstraints = {
+          cursor: "always",
+        }
         const stream = await navigator.mediaDevices.getDisplayMedia({
-          video: true,
-          audio: true,
+          // keep constraints simple for maximum browser compatibility
+          video: displayVideoConstraints,
+          audio: false,
         })
         setScreenStream(stream)
         setIsScreenSharing(true)
 
-        // Replace video track in peer connection
+        // Local preview: show the display stream in the dedicated screen-share video element
+        await playVideoSafely(screenShareVideoRef.current)
+
+        // Replace video track in peer connection so the AI sees the shared screen
         if (peerConnection && localStream) {
           const videoTrack = stream.getVideoTracks()[0]
           const sender = peerConnection
@@ -311,50 +379,14 @@ export function InterviewInterface() {
           }
         }
 
-        if (localVideoRef.current) {
-          localVideoRef.current.srcObject = stream
-        }
-
-        // Handle screen share stop
-        stream.getVideoTracks()[0].onended = async () => {
-          setIsScreenSharing(false)
-          if (localStream) {
-            // Replace back with camera track
-            if (peerConnection) {
-              const cameraTrack = localStream.getVideoTracks()[0]
-              const sender = peerConnection
-                .getSenders()
-                .find((s) => s.track && s.track.kind === "video")
-              if (sender && cameraTrack) {
-                await sender.replaceTrack(cameraTrack)
-              }
-            }
-            if (localVideoRef.current) {
-              localVideoRef.current.srcObject = localStream
-            }
-          }
-          stream.getTracks().forEach((track) => track.stop())
-          setScreenStream(null)
+        // Handle screen share stop triggered from browser UI
+        stream.getVideoTracks()[0].onended = () => {
+          // Fire and forget; helper is idempotent
+          void stopScreenShare()
         }
       } else {
-        if (screenStream) {
-          // Replace back with camera track
-          if (peerConnection && localStream) {
-            const cameraTrack = localStream.getVideoTracks()[0]
-            const sender = peerConnection
-              .getSenders()
-              .find((s) => s.track && s.track.kind === "video")
-            if (sender && cameraTrack) {
-              await sender.replaceTrack(cameraTrack)
-            }
-          }
-          screenStream.getTracks().forEach((track) => track.stop())
-          setScreenStream(null)
-        }
-        setIsScreenSharing(false)
-        if (localVideoRef.current && localStream) {
-          localVideoRef.current.srcObject = localStream
-        }
+        // Explicit stop via our toggle button
+        await stopScreenShare()
       }
     } catch (error) {
       console.error("Error sharing screen:", error)
@@ -435,7 +467,7 @@ export function InterviewInterface() {
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 w-screen h-screen bg-background flex flex-col overflow-hidden"
+      className="fixed inset-0 w-screen h-screen bg-background flex flex-col"
     >
       {/* Navbar */}
       <nav className="w-full py-3 px-6 bg-background/80 backdrop-blur-md border-b border-border z-20">
@@ -457,10 +489,68 @@ export function InterviewInterface() {
 
       {/* Main video container */}
       <div className="flex-1 relative flex items-center justify-center p-4 gap-4">
-        {/* Split view mode */}
-        {viewMode === "split" && (
-          <>
-            {/* AI Interviewer - Left side */}
+        {isScreenSharing ? (
+          <div className="w-full h-full flex items-center justify-center px-4">
+            <div className="relative w-full max-w-5xl h-full max-h-[75vh] mx-auto">
+              <div className="w-full h-full rounded-3xl overflow-hidden bg-muted/40 border-2 border-border shadow-[0_0_40px_rgba(0,0,0,0.35)]">
+                <video
+                  ref={screenShareVideoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-contain bg-black"
+                />
+                {!screenStream && (
+                  <div className="absolute inset-0 flex items-center justify-center bg-muted text-muted-foreground text-lg font-medium">
+                    Preparing screen share...
+                  </div>
+                )}
+              </div>
+
+              {/* Overlapping bubbles */}
+              <div className="absolute -top-10 -right-6 flex flex-col items-center">
+                <div className="relative w-24 h-24 rounded-full overflow-hidden bg-muted border-2 border-primary/40 shadow-lg">
+                  <video
+                    ref={remoteVideoRef}
+                    autoPlay
+                    playsInline
+                    muted={false}
+                    className={`w-full h-full object-cover ${hasRemoteStream ? "block" : "hidden"}`}
+                  />
+                  {!hasRemoteStream && (
+                    <div className="absolute inset-0 flex flex-col items-center justify-center text-center bg-gradient-to-br from-primary/10 to-primary/5 px-3">
+                      <Avatar className="w-14 h-14 mx-auto mb-1 border-2 border-primary/30">
+                        <AvatarImage src={interviewerAvatar} alt={interviewerName} />
+                        <AvatarFallback className="bg-primary/20 text-primary text-xl font-semibold">
+                          {interviewerInitials}
+                        </AvatarFallback>
+                      </Avatar>
+                      <p className="text-[10px] text-muted-foreground">
+                        {isConnected ? "Connecting..." : "Waiting..."}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="relative w-24 h-24 rounded-full overflow-hidden bg-muted border-2 border-primary/40 shadow-lg -mt-8">
+                  <video
+                    ref={cameraPreviewRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover"
+                  />
+                  {!isVideoOn && (
+                    <div className="absolute inset-0 bg-muted flex items-center justify-center">
+                      <VideoOff className="w-8 h-8 text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex w-full h-full gap-4">
             <div className="flex-1 h-full relative rounded-xl overflow-hidden bg-muted/20 border border-border">
               <video
                 ref={remoteVideoRef}
@@ -487,7 +577,6 @@ export function InterviewInterface() {
               )}
             </div>
 
-            {/* User - Right side */}
             <div className="flex-1 h-full relative rounded-xl overflow-hidden bg-muted/20 border border-border">
               <video
                 ref={localVideoRef}
@@ -502,100 +591,12 @@ export function InterviewInterface() {
                 </div>
               )}
             </div>
-          </>
-        )}
-
-        {/* AI Big view mode */}
-        {viewMode === "ai-big" && (
-          <>
-            <div className="flex-1 h-full relative rounded-xl overflow-hidden bg-muted/20 border border-border">
-              <video
-                ref={remoteVideoRef}
-                autoPlay
-                playsInline
-                muted={false}
-                className={`w-full h-full object-cover ${hasRemoteStream ? "block" : "hidden"}`}
-              />
-              {!hasRemoteStream && (
-                <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-br from-primary/10 to-primary/5">
-                  <div className="text-center">
-                    <Avatar className="w-32 h-32 mx-auto mb-6 border-4 border-primary/30">
-                      <AvatarImage src={interviewerAvatar} alt={interviewerName} />
-                      <AvatarFallback className="bg-primary/20 text-primary text-4xl font-semibold">
-                        {interviewerInitials}
-                      </AvatarFallback>
-                    </Avatar>
-                    <h3 className="text-foreground text-2xl font-semibold mb-2">{interviewerName}</h3>
-                    <p className="text-muted-foreground text-lg">
-                      {isConnected ? "Connecting..." : "Preparing interview..."}
-                    </p>
-                  </div>
-                </div>
-              )}
             </div>
-
-            {/* Local video (picture-in-picture) */}
-            <div className="absolute bottom-20 right-4 w-64 h-48 rounded-xl overflow-hidden bg-muted border-2 border-primary shadow-lg">
-              <video
-                ref={localVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-              />
-              {!isVideoOn && (
-                <div className="absolute inset-0 bg-muted flex items-center justify-center">
-                  <VideoOff className="w-12 h-12 text-muted-foreground" />
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
-        {/* User Big view mode */}
-        {viewMode === "user-big" && (
-          <>
-            <div className="flex-1 h-full relative rounded-xl overflow-hidden bg-muted/20 border border-border">
-              <video
-                ref={localVideoRef}
-                autoPlay
-                playsInline
-                muted
-                className="w-full h-full object-cover"
-              />
-              {!isVideoOn && (
-                <div className="absolute inset-0 bg-muted flex items-center justify-center">
-                  <VideoOff className="w-12 h-12 text-muted-foreground" />
-                </div>
-              )}
-            </div>
-
-            {/* AI video (picture-in-picture) */}
-            <div className="absolute bottom-20 right-4 w-64 h-48 rounded-xl overflow-hidden bg-muted border-2 border-primary shadow-lg">
-              <video
-                ref={remoteVideoRef}
-                autoPlay
-                playsInline
-                muted={false}
-                className={`w-full h-full object-cover ${hasRemoteStream ? "block" : "hidden"}`}
-              />
-              {!hasRemoteStream && (
-                <div className="absolute inset-0 bg-gradient-to-br from-primary/10 to-primary/5 flex items-center justify-center">
-                  <Avatar className="w-16 h-16 border-2 border-primary/30">
-                    <AvatarImage src={interviewerAvatar} alt={interviewerName} />
-                    <AvatarFallback className="bg-primary/20 text-primary text-xl font-semibold">
-                      {interviewerInitials}
-                    </AvatarFallback>
-                  </Avatar>
-                </div>
-              )}
-            </div>
-          </>
         )}
       </div>
 
-      {/* Control bar */}
-      <div className="w-full flex items-center justify-center gap-4 p-6 bg-gradient-to-t from-background via-background to-transparent">
+      {/* Control bar - always visible above content */}
+      <div className="absolute inset-x-0 bottom-0 z-30 flex items-center justify-center gap-4 px-4 pb-6 pt-4 bg-gradient-to-t from-background via-background/95 to-transparent">
         {/* Video toggle */}
         <Button
           onClick={toggleVideo}
@@ -638,19 +639,6 @@ export function InterviewInterface() {
           {isScreenSharing ? <MonitorOff className="w-6 h-6" /> : <Monitor className="w-6 h-6" />}
         </Button>
 
-        {/* View mode toggle - switch between user big and AI big */}
-        <Button
-          onClick={() => {
-            setViewMode(viewMode === "user-big" ? "ai-big" : "user-big")
-          }}
-          size="lg"
-          className="rounded-full w-14 h-14 bg-secondary text-secondary-foreground hover:bg-secondary/90"
-          aria-label={viewMode === "user-big" ? "Switch to AI view" : "Switch to your view"}
-          title={viewMode === "user-big" ? "Show AI big" : "Show you big"}
-        >
-          <LayoutGrid className="w-6 h-6" />
-        </Button>
-
         {/* Conversation toggle */}
         <Button
           onClick={() => setShowConversation(!showConversation)}
@@ -687,26 +675,28 @@ export function InterviewInterface() {
       </div>
 
       {/* Status indicators */}
-      <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
-        <div className="px-3 py-1.5 rounded-full bg-muted/80 backdrop-blur-sm border border-border text-sm font-medium">
-          <span className="text-muted-foreground">AI Interview</span>
+      {!isScreenSharing && (
+        <div className="absolute top-4 left-4 flex flex-col gap-2 z-10">
+          <div className="px-3 py-1.5 rounded-full bg-muted/80 backdrop-blur-sm border border-border text-sm font-medium">
+            <span className="text-muted-foreground">AI Interview</span>
+          </div>
+          {!isVideoOn && (
+            <div className="px-3 py-1.5 rounded-full bg-destructive/20 backdrop-blur-sm border border-destructive text-sm font-medium text-destructive">
+              Camera Off
+            </div>
+          )}
+          {isRecording && (
+            <div className="px-3 py-1.5 rounded-full bg-primary/20 backdrop-blur-sm border border-primary text-sm font-medium text-primary">
+              Recording...
+            </div>
+          )}
+          {isScreenSharing && (
+            <div className="px-3 py-1.5 rounded-full bg-primary/20 backdrop-blur-sm border border-primary text-sm font-medium text-primary">
+              Sharing Screen
+            </div>
+          )}
         </div>
-        {!isVideoOn && (
-          <div className="px-3 py-1.5 rounded-full bg-destructive/20 backdrop-blur-sm border border-destructive text-sm font-medium text-destructive">
-            Camera Off
-          </div>
-        )}
-        {isRecording && (
-          <div className="px-3 py-1.5 rounded-full bg-primary/20 backdrop-blur-sm border border-primary text-sm font-medium text-primary">
-            Recording...
-          </div>
-        )}
-        {isScreenSharing && (
-          <div className="px-3 py-1.5 rounded-full bg-primary/20 backdrop-blur-sm border border-primary text-sm font-medium text-primary">
-            Sharing Screen
-          </div>
-        )}
-      </div>
+      )}
 
       {/* Conversation + backend controls */}
       {showConversation && (
