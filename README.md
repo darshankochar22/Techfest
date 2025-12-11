@@ -8,6 +8,8 @@ Opinionated setup notes for running the Next.js frontend and the Python FastAPI 
 
 ![Landing page preview](<public/images/Screenshot 2025-12-11 at 3.37.56 PM.png>)
 ![Product UI preview](<public/images/Screenshot 2025-12-11 at 3.37.10 PM.png>)
+![Dashboard preview](<public/images/Screenshot 2025-12-11 at 3.50.05 PM.png>)
+![Additional view](<public/images/Screenshot 2025-12-11 at 3.50.32 PM.png>)
 
 ## Prerequisites
 
