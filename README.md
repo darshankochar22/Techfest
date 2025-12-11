@@ -125,7 +125,7 @@ uvicorn backend.conversation:app --reload --port 8000
 - First TTS run downloads the model; expect a short warm-up.
 - Frontend and backend are independent; start only what you need.
 
-##Team & Roles:
+## Team & Roles:
 
 Eshika Mishra: (Frontend, UI UX design): Expert
 figma, User experience design, React
