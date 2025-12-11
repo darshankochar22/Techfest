@@ -446,11 +446,18 @@ export function HeroSection() {
         </p>
       </div>
 
-      <Link href="https://vercel.com/home" target="_blank" rel="noopener noreferrer">
-        <Button className="relative z-10 bg-secondary text-secondary-foreground hover:bg-secondary/90 px-8 py-3 rounded-full font-medium text-base shadow-lg ring-1 ring-white/10">
-          Signup for free
-        </Button>
-      </Link>
+      <div className="flex gap-3 relative z-10">
+        <Link href="/setup">
+          <Button className="bg-primary text-primary-foreground hover:bg-primary/90 px-8 py-3 rounded-full font-medium text-base shadow-lg">
+            Start Interview
+          </Button>
+        </Link>
+        <Link href="/interview">
+          <Button variant="outline" className="px-8 py-3 rounded-full font-medium text-base shadow-lg">
+            Quick Start
+          </Button>
+        </Link>
+      </div>
     </section>
   )
 }
