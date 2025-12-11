@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Pointer AI — 1-Page Architecture</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Arial, sans-serif; background: #f7f7f7; color: #111; padding: 32px; }
+    .page { max-width: 1100px; margin: 0 auto; background: #fff; border: 1px solid #ddd; padding: 28px 32px 36px; box-shadow: 0 10px 30px rgba(0,0,0,0.05); }
+    h1 { text-align: center; letter-spacing: 0.5px; margin-bottom: 4px; font-size: 24px; }
+    .subtitle { text-align: center; font-size: 13px; color: #555; margin-bottom: 22px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 18px; }
+    .block { border: 1.5px solid #111; background: #fafafa; padding: 14px; }
+    .block h3 { font-size: 14px; margin-bottom: 6px; }
+    .block p { font-size: 12px; line-height: 1.45; color: #333; }
+    .flow { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 10px 0 6px; }
+    .step { border: 1px solid #111; padding: 10px; background: #fff; }
+    .step h4 { font-size: 12px; margin-bottom: 4px; }
+    .step p { font-size: 11px; color: #333; line-height: 1.35; }
+    .label { font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 6px; }
+    .latency { font-size: 11px; color: #444; font-style: italic; margin-top: 4px; }
+    .footer { display: flex; justify-content: space-between; font-size: 11px; color: #555; border-top: 1px solid #e3e3e3; padding-top: 10px; margin-top: 14px; }
+    @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <h1>Pointer AI — Architecture at a Glance</h1>
+    <div class="subtitle">1-page flow from microphone to spoken reply (Dec 2025)</div>
+
+    <div class="grid">
+      <div class="block">
+        <h3>Frontend</h3>
+        <p>Next.js 15 (App Router) + React 19. MediaRecorder captures voice in 3s WebM/Opus chunks. Optional WebRTC signaling via `server/websocket-server.js`; fallback polling API under `app/api/webrtc/*`.</p>
+      </div>
+      <div class="block">
+        <h3>Backend</h3>
+        <p>FastAPI (`backend/conversation.py` / `conversation_realtime.py`). Whisper base for STT, Groq LLM for replies, coqui-tts (Tacotron2 DDC) for speech. Requires `GROQ_API_KEY` in `backend/.env`.</p>
+      </div>
+    </div>
+
+    <div class="label">Data path</div>
+    <div class="flow">
+      <div class="step">
+        <h4>1) Capture</h4>
+        <p>Browser mic → WebM/Opus chunk.</p>
+        <div class="latency">~300–500ms</div>
+      </div>
+      <div class="step">
+        <h4>2) Send</h4>
+        <p>WebRTC (P2P) or HTTP POST `/interview/turn` with `session_id` + audio.</p>
+        <div class="latency">~50–300ms</div>
+      </div>
+      <div class="step">
+        <h4>3) Preprocess</h4>
+        <p>Convert to WAV, validate.</p>
+        <div class="latency">~20–50ms</div>
+      </div>
+      <div class="step">
+        <h4>4) STT</h4>
+        <p>Whisper base transcribes.</p>
+        <div class="latency">~200–400ms</div>
+      </div>
+      <div class="step">
+        <h4>5) LLM</h4>
+        <p>Groq (Llama 3) generates reply using last 10 turns.</p>
+        <div class="latency">~500–1000ms</div>
+      </div>
+      <div class="step">
+        <h4>6) TTS</h4>
+        <p>coqui-tts synthesizes WAV @22.05kHz.</p>
+        <div class="latency">~300–600ms</div>
+      </div>
+      <div class="step">
+        <h4>7) Return</h4>
+        <p>JSON: transcript, replyText, replyAudio (base64 wav).</p>
+        <div class="latency">~50–200ms</div>
+      </div>
+      <div class="step">
+        <h4>8) Play</h4>
+        <p>Frontend decodes and plays audio; UI shows transcript.</p>
+        <div class="latency">near-immediate</div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="block">
+        <h3>Key endpoints</h3>
+        <p>`POST /interview/turn` (multipart audio + `session_id`), `POST /interview/reset`, `GET /health`. WebRTC signaling: `/api/webrtc/offer|answer|ice-candidate`.</p>
+      </div>
+      <div class="block">
+        <h3>Constraints & tips</h3>
+        <p>Use Python 3.12 + coqui-tts (not legacy TTS). First run downloads models; allow warm-up. For strict NATs, add TURN. Keep `ffmpeg` on PATH.</p>
+      </div>
+    </div>
+
+    <div class="footer">
+      <div>Total typical latency: ~1.8–2.6s end-to-end</div>
+      <div>Contacts: Pointer team</div>
+    </div>
+  </div>
+</body>
+</html>

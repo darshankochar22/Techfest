@@ -11,6 +11,7 @@ Project overview, setup, and run instructions for the Pointer AI landing page an
 ![Dashboard preview](<public/images/Screenshot 2025-12-11 at 3.50.05 PM.png>)
 ![Additional view](<public/images/Screenshot 2025-12-11 at 3.50.32 PM.png>)
 
+
 ## Project overview
 
 Pointer provides a mock-interview experience with voice: the frontend captures audio, the backend transcribes with Whisper, gets an LLM reply via Groq, and returns TTS audio (coqui-tts) for playback.
@@ -26,6 +27,9 @@ Pointer provides a mock-interview experience with voice: the frontend captures a
 - Frontend: Next.js 15 (App Router), Radix/Shadcn UI, optional WebSocket signaling server (`server/websocket-server.js`) with polling fallback routes under `app/api/webrtc/*`.
 - Backend: FastAPI (`backend/conversation.py` / `backend/conversation_realtime.py`) using Whisper (base) STT, Groq LLM, coqui-tts for speech.
 - Data flow: browser records → upload chunk → backend transcribes → LLM reply → TTS wav → frontend plays audio.
+
+![Architecture diagram](<public/images/Screenshot 2025-12-11 at 8.55.38 PM.png>)
+![Architecture overview](<public/images/Screenshot 2025-12-11 at 9.00.51 PM.png>)
 
 ## How to run locally (step by step)
 
@@ -137,4 +141,4 @@ Darshan Kochar: Backend AI developer,with
 roles of Architecture design and API
 integration & Full stack end to end
 development and Deployment & Devops,
-docker, Redis implementation in later stages  
+docker, Redis implementation in later stages
