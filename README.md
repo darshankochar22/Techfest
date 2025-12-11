@@ -39,13 +39,15 @@ Opinionated setup notes for running the Next.js frontend and the Python FastAPI 
    python -m venv .venv
    source .venv/bin/activate
    ```
-2. Install deps:
+2. Create `backend/.env` (or export in your shell) with:
+   ```env
+   GROQ_API_KEY=your_groq_api_key_here
+   ```
+3. Install deps:
    ```bash
    pip install --upgrade pip
    pip install -r backend/requirements.txt
    ```
-3. Environment:
-   - `GROQ_API_KEY` is required for LLM access (set in `.env` or your shell).
 4. Run:
    ```bash
    uvicorn backend.conversation:app --reload --port 8000
