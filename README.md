@@ -4,6 +4,11 @@
 
 Opinionated setup notes for running the Next.js frontend and the Python FastAPI backend locally. Keep it simple; no extra test steps are required.
 
+## Screenshots
+
+![Landing page preview](<public/images/Screenshot 2025-12-11 at 3.37.56 PM.png>)
+![Product UI preview](<public/images/Screenshot 2025-12-11 at 3.37.10 PM.png>)
+
 ## Prerequisites
 
 - Node.js 18+ (matches Next.js 15 requirements)
