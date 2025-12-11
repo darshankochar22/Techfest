@@ -4,7 +4,7 @@
 
 1. Install dependencies inside your virtualenv:
    ```
-   pip install fastapi uvicorn python-dotenv whisper soundfile TTS groq numpy
+   pip install fastapi uvicorn python-dotenv whisper soundfile coqui-tts groq numpy
    ```
 2. Set `GROQ_API_KEY` in `.env` or your shell.
 3. Start the API server from `backend/`:
@@ -15,14 +15,18 @@
 ## API
 
 ### `GET /health`
+
 Simple readiness probe. Returns `{"status": "ok"}`.
 
 ### `POST /interview/turn`
+
 Multipart form-data request:
+
 - `session_id` (text) – stable identifier per interview
 - `audio` (file) – WAV/M4A chunk recorded from the browser
 
 Response:
+
 ```json
 {
   "sessionId": "candidate-123",
@@ -33,6 +37,7 @@ Response:
 ```
 
 ### `POST /interview/reset`
+
 JSON body: `{ "session_id": "candidate-123" }`. Clears stored conversation context.
 
 ## Example Next.js client snippet
@@ -58,4 +63,3 @@ const sendTurn = async (file: File, sessionId: string) => {
   return data;
 };
 ```
-

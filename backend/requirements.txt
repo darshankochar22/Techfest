@@ -11,7 +11,9 @@ openai-whisper>=20231117
 groq>=0.4.0,<1.0.0
 
 # Text-to-Speech
-TTS>=0.22.0,<1.0.0
+# The original `TTS` package caps out at Python 3.11. Use the maintained
+# `coqui-tts` fork which ships wheels compatible with Python 3.12+.
+coqui-tts>=0.24.3,<1.0.0
 
 # Audio Processing
 soundfile>=0.12.1,<1.0.0
