@@ -21,6 +21,8 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useInterviewSession } from "@/hooks/useInterviewSession"
@@ -38,6 +40,8 @@ export function InterviewInterface() {
   const [screenStream, setScreenStream] = useState<MediaStream | null>(null)
   const [peerConnection, setPeerConnection] = useState<RTCPeerConnection | null>(null)
   const [socket, setSocket] = useState<WebSocket | null>(null)
+  const [resumeText, setResumeText] = useState("")
+  const [jobDescription, setJobDescription] = useState("")
 
   const localVideoRef = useRef<HTMLVideoElement>(null)
   const remoteVideoRef = useRef<HTMLVideoElement>(null)
@@ -70,6 +74,10 @@ export function InterviewInterface() {
     startRecording,
     stopRecording,
     resetSession,
+    updateContext,
+    isSavingContext,
+    contextError,
+    contextSavedAt,
     backendUrl,
   } = useInterviewSession()
 
@@ -441,6 +449,10 @@ export function InterviewInterface() {
     resetSession()
   }
 
+  const handleSaveContext = async () => {
+    await updateContext({ resumeText, jobDescription })
+  }
+
   // End call handler
   const endCall = () => {
     if (localStream) {
@@ -701,7 +713,62 @@ export function InterviewInterface() {
       {/* Conversation + backend controls */}
       {showConversation && (
         <div className="w-full px-6 pb-6">
-          <Card className="max-w-4xl mx-auto bg-background/80 border border-border">
+          <div className="max-w-4xl mx-auto space-y-4">
+            <Card className="bg-background/80 border border-border">
+              <CardHeader className="space-y-2">
+                <CardTitle className="text-lg">Interview context</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Paste the job description and candidate resume so the interviewer can tailor questions.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="job-description">Job description</Label>
+                  <Textarea
+                    id="job-description"
+                    value={jobDescription}
+                    onChange={(e) => setJobDescription(e.target.value)}
+                    placeholder="Paste the JD here..."
+                    className="min-h-[140px]"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="resume-text">Candidate resume</Label>
+                  <Textarea
+                    id="resume-text"
+                    value={resumeText}
+                    onChange={(e) => setResumeText(e.target.value)}
+                    placeholder="Paste the candidate resume here..."
+                    className="min-h-[180px]"
+                  />
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs text-muted-foreground">
+                    {contextSavedAt
+                      ? `Context saved ${new Date(contextSavedAt).toLocaleTimeString()}`
+                      : "Context is optional but improves interview relevance."}
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {contextError && <p className="text-xs text-destructive">{contextError}</p>}
+                    <Button
+                      onClick={handleSaveContext}
+                      disabled={isSavingContext || (!resumeText && !jobDescription)}
+                    >
+                      {isSavingContext ? (
+                        <span className="inline-flex items-center gap-2">
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Saving...
+                        </span>
+                      ) : (
+                        "Save context"
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-background/80 border border-border">
             <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
                 <CardTitle className="text-lg">Pointer conversation</CardTitle>
@@ -758,6 +825,7 @@ export function InterviewInterface() {
             )}
           </CardContent>
         </Card>
+          </div>
       </div>
       )}
     </div>

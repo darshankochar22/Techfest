@@ -33,6 +33,9 @@ export function useInterviewSession() {
   const [error, setError] = useState<string | null>(null)
   const [isRecording, setIsRecording] = useState(false)
   const [replyAudioUrl, setReplyAudioUrl] = useState<string | null>(null)
+  const [isSavingContext, setIsSavingContext] = useState(false)
+  const [contextError, setContextError] = useState<string | null>(null)
+  const [contextSavedAt, setContextSavedAt] = useState<number | null>(null)
 
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunkRef = useRef<Blob[]>([])
@@ -180,8 +183,41 @@ export function useInterviewSession() {
       setMessages([])
       setError(null)
       setStatus("idle")
+      setContextSavedAt(null)
+      setContextError(null)
     }
   }, [sessionId])
+
+  const updateContext = useCallback(
+    async ({ resumeText, jobDescription }: { resumeText: string; jobDescription: string }) => {
+      setIsSavingContext(true)
+      setContextError(null)
+      try {
+        const response = await fetch(`${baseUrl}/interview/context`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            session_id: sessionId,
+            resume_text: resumeText,
+            job_description: jobDescription,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error(`Backend error (${response.status})`)
+        }
+
+        setContextSavedAt(Date.now())
+        setMessages([]) // Clear local transcript to reflect the refreshed context
+      } catch (err) {
+        console.error(err)
+        setContextError(err instanceof Error ? err.message : "Unable to save context")
+      } finally {
+        setIsSavingContext(false)
+      }
+    },
+    [sessionId]
+  )
 
   return {
     sessionId,
@@ -192,6 +228,10 @@ export function useInterviewSession() {
     startRecording,
     stopRecording,
     resetSession,
+    updateContext,
+    isSavingContext,
+    contextError,
+    contextSavedAt,
     backendUrl: baseUrl,
   }
 }

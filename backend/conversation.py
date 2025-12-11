@@ -47,6 +47,12 @@ class ResetRequest(BaseModel):
     session_id: str
 
 
+class ContextRequest(BaseModel):
+    session_id: str
+    resume_text: str | None = ""
+    job_description: str | None = ""
+
+
 def transcribe_audio_bytes(audio_bytes: bytes) -> str:
     if not audio_bytes:
         return ""
@@ -121,4 +127,30 @@ async def interview_turn(
 def reset_session(payload: ResetRequest):
     sessions.pop(payload.session_id, None)
     return {"sessionId": payload.session_id, "cleared": True}
+
+
+@app.post("/interview/context")
+def set_interview_context(payload: ContextRequest):
+    """Attach resume and job description context to the session's system prompt."""
+    resume = (payload.resume_text or "").strip()
+    job_desc = (payload.job_description or "").strip()
+
+    context_parts = [SYSTEM_PROMPT]
+    if job_desc:
+        context_parts.append(f"Job description:\n{job_desc}")
+    if resume:
+        context_parts.append(f"Candidate resume:\n{resume}")
+
+    context_parts.append(
+        "Use the job description and resume to tailor questions, probe for relevant"
+        " experience, and provide concise, actionable feedback."
+    )
+
+    system_message = "\n\n".join(context_parts)
+    sessions[payload.session_id] = [{"role": "system", "content": system_message}]
+
+    return {
+        "sessionId": payload.session_id,
+        "hasContext": bool(resume or job_desc),
+    }
 
