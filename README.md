@@ -2,7 +2,7 @@
 
 # Pointer AI Landing Page
 
-Opinionated setup notes for running the Next.js frontend and the Python FastAPI backend locally. Keep it simple; no extra test steps are required.
+Project overview, setup, and run instructions for the Pointer AI landing page and demo backend. A more detailed 2-page writeup lives at `docs/technical-summary.pdf`.
 
 ## Screenshots
 
@@ -11,56 +11,70 @@ Opinionated setup notes for running the Next.js frontend and the Python FastAPI 
 ![Dashboard preview](<public/images/Screenshot 2025-12-11 at 3.50.05 PM.png>)
 ![Additional view](<public/images/Screenshot 2025-12-11 at 3.50.32 PM.png>)
 
-## Prerequisites
+## Project overview
 
-- Node.js 18+ (matches Next.js 15 requirements)
-- Python 3.12+
-- `ffmpeg` in your PATH (required by the TTS stack)
+Pointer provides a mock-interview experience with voice: the frontend captures audio, the backend transcribes with Whisper, gets an LLM reply via Groq, and returns TTS audio (coqui-tts) for playback.
 
-## 1) Frontend (Next.js)
+## Setup instructions
 
-1. Install deps:
-   ```bash
-   npm install
-   ```
-2. Environment (optional):
-   - `NEXT_PUBLIC_WS_URL` to point the app to a custom signaling WebSocket (defaults to the built-in API routes if not set).
-3. Run:
-   ```bash
-   npm run dev
-   ```
-   The site is available at http://localhost:3000.
+- Prereqs: Node.js 18+, Python 3.12+, `ffmpeg` on PATH.
+- Frontend deps: `npm install`
+- Backend deps: create `backend/.env` with `GROQ_API_KEY=...`, then `pip install -r backend/requirements.txt`
 
-### WebRTC signaling (optional but recommended)
+## Architecture overview
 
-- Start the lightweight signaling server if you want true real-time signaling:
+- Frontend: Next.js 15 (App Router), Radix/Shadcn UI, optional WebSocket signaling server (`server/websocket-server.js`) with polling fallback routes under `app/api/webrtc/*`.
+- Backend: FastAPI (`backend/conversation.py` / `backend/conversation_realtime.py`) using Whisper (base) STT, Groq LLM, coqui-tts for speech.
+- Data flow: browser records → upload chunk → backend transcribes → LLM reply → TTS wav → frontend plays audio.
+
+## How to run locally
+
+- Frontend: `npm run dev` (http://localhost:3000). Optionally set `NEXT_PUBLIC_WS_URL` for custom signaling.
+- Signaling (optional, recommended): `node server/websocket-server.js`
+- Backend: from repo root,
   ```bash
-  node server/websocket-server.js
+  python -m venv .venv
+  source .venv/bin/activate
+  echo "GROQ_API_KEY=your_key" > backend/.env
+  pip install -r backend/requirements.txt
+  uvicorn backend.conversation:app --reload --port 8000
   ```
-- Alternatively, the built-in API routes under `app/api/webrtc/*` provide a polling-based fallback.
 
-## 2) Backend (FastAPI)
+## APIs or endpoints
 
-1. From the repo root, create and activate a virtualenv (example):
-   ```bash
-   python -m venv .venv
-   source .venv/bin/activate
-   ```
-2. Create `backend/.env` (or export in your shell) with:
-   ```env
-   GROQ_API_KEY=your_groq_api_key_here
-   ```
-3. Install deps:
-   ```bash
-   pip install --upgrade pip
-   pip install -r backend/requirements.txt
-   ```
-4. Run:
-   ```bash
-   uvicorn backend.conversation:app --reload --port 8000
-   ```
+- Backend FastAPI:
+  - `GET /health` → `{"status":"ok"}`
+  - `POST /interview/turn` (multipart: `session_id`, `audio` file) → transcript, replyText, replyAudio (base64 wav)
+  - `POST /interview/reset` (JSON: `session_id`) → clears context
+- Frontend signaling (fallback):
+  - `POST /api/webrtc/offer`
+  - `POST /api/webrtc/answer`
+  - `POST /api/webrtc/ice-candidate`
+
+## Example inputs/outputs
+
+`POST /interview/turn` response (abridged):
+
+```json
+{
+  "sessionId": "candidate-123",
+  "transcript": "Tell me about yourself",
+  "replyText": "Great to meet you! ...",
+  "replyAudio": "base64-wav..."
+}
+```
+
+## List of dependencies
+
+- Frontend (core): Next.js 15.2.6, React 19, Radix UI, Tailwind stack, Vercel analytics.
+- Backend (core): FastAPI, uvicorn, python-dotenv, whisper, groq, coqui-tts, soundfile/device, numpy.
+- Signaling: `ws` for optional WebSocket server.
+
+## Contributors
+
+- Pointer team / Darshan (maintainer)
 
 ## Notes
 
-- The TTS model downloads on first run via `coqui-tts`; expect a short initial warm-up.
-- Frontend and backend are independent; start only what you need for your workflow.
+- First TTS run downloads the model; expect a short warm-up.
+- Frontend and backend are independent; start only what you need.
