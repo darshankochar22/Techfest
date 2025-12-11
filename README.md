@@ -1,4 +1,8 @@
 <!-- Project README -->
+# Disclaimer
+
+Backend is not yet deployed due to version confilicts and virtual env issues and we are using only open source STT and TTS models
+so we request you to judge us on the basis of demo video as well https://youtu.be/J0NbeIi0jHE
 
 # Pointer: AI Interviewer
 
