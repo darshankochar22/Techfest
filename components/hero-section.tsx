@@ -439,10 +439,10 @@ export function HeroSection() {
 
       <div className="relative z-10 space-y-4 md:space-y-5 lg:space-y-6 mb-6 md:mb-7 lg:mb-9 max-w-md md:max-w-[500px] lg:max-w-[588px] mt-16 md:mt-[120px] lg:mt-[160px] px-4">
         <h1 className="text-foreground text-3xl md:text-4xl lg:text-6xl font-semibold leading-tight">
-          Revolutionize Your Hiring with AI Interviews
+          Revolutionize Your Hiring with AI 
         </h1>
         <p className="text-muted-foreground text-base md:text-base lg:text-lg font-medium leading-relaxed max-w-lg mx-auto">
-          Streamline your recruitment process with intelligent AI-powered interviews that assess, evaluate, and help you find the best candidates.
+          Streamline your recruitment process with intelligent interviews that assess, and help you find the best candidates.
         </p>
       </div>
 

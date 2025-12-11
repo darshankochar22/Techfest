@@ -1,1 +1,1 @@
-self.__REACT_LOADABLE_MANIFEST="{}"
+self.__REACT_LOADABLE_MANIFEST="{\"hooks/useBehaviorAnalysis.ts -> @mediapipe/drawing_utils\":{\"id\":\"hooks/useBehaviorAnalysis.ts -> @mediapipe/drawing_utils\",\"files\":[\"static/chunks/_app-pages-browser_node_modules_mediapipe_drawing_utils_drawing_utils_js.js\"]},\"hooks/useBehaviorAnalysis.ts -> @mediapipe/face_mesh\":{\"id\":\"hooks/useBehaviorAnalysis.ts -> @mediapipe/face_mesh\",\"files\":[\"static/chunks/_app-pages-browser_node_modules_mediapipe_face_mesh_face_mesh_js.js\"]}}"

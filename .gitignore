@@ -1,3 +1,4 @@
 node_modules
 backend/tts_env
 backend/.env
+.next

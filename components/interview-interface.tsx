@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, useMemo } from "react"
+import { useState, useRef, useEffect, useMemo, useCallback } from "react"
 import {
   Video,
   VideoOff,
@@ -23,9 +23,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Switch } from "@/components/ui/switch"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { useInterviewSession } from "@/hooks/useInterviewSession"
+import { useBehaviorAnalysis } from "@/hooks/useBehaviorAnalysis"
 
 export function InterviewInterface() {
   const router = useRouter()
@@ -42,6 +44,8 @@ export function InterviewInterface() {
   const [socket, setSocket] = useState<WebSocket | null>(null)
   const [resumeText, setResumeText] = useState("")
   const [jobDescription, setJobDescription] = useState("")
+  const [behaviorEnabled, setBehaviorEnabled] = useState(false)
+  const [behaviorAdvice, setBehaviorAdvice] = useState<string[] | null>(null)
 
   const localVideoRef = useRef<HTMLVideoElement>(null)
   const remoteVideoRef = useRef<HTMLVideoElement>(null)
@@ -80,6 +84,19 @@ export function InterviewInterface() {
     contextSavedAt,
     backendUrl,
   } = useInterviewSession()
+
+  const {
+    running: behaviorRunning,
+    lastSnapshot,
+    summary: behaviorSummary,
+    error: behaviorError,
+    computeSummary,
+  } = useBehaviorAnalysis({
+    stream: isVideoOn ? localStream : null,
+    enabled: behaviorEnabled,
+    sampleIntervalMs: 600,
+    maxSamples: 300,
+  })
 
   // Interviewer info
   const interviewerName = "AI Interviewer"
@@ -453,8 +470,51 @@ export function InterviewInterface() {
     await updateContext({ resumeText, jobDescription })
   }
 
+  const buildBehaviorAdvice = useCallback(() => {
+    const summary = computeSummary()
+    if (!summary.samples) return ["We could not detect your face long enough to generate advice."]
+
+    const bullets: string[] = []
+    const smilePct = Math.round(summary.avgSmile * 100)
+    const engagementPct = Math.round(summary.avgEngagement * 100)
+    const browPct = Math.round(summary.avgBrow * 100)
+
+    if (smilePct >= 50) {
+      bullets.push("Good warmth: you smiled through much of the interview.")
+    } else if (smilePct >= 25) {
+      bullets.push("Try to maintain more consistent warmth—light smiles help convey openness.")
+    } else {
+      bullets.push("Increase visible warmth; very little smiling can feel closed-off.")
+    }
+
+    if (browPct <= 35) {
+      bullets.push("Brow tension seemed elevated at times—relax your brow/forehead between answers.")
+    } else {
+      bullets.push("Brow posture stayed relaxed; keep that neutral, attentive look.")
+    }
+
+    if (engagementPct >= 65) {
+      bullets.push("Overall engagement read as confident and attentive—nice job.")
+    } else if (engagementPct >= 45) {
+      bullets.push("Engagement was moderate; lean in slightly and keep steady gaze to project confidence.")
+    } else {
+      bullets.push("Engagement read low; lift posture, steady your gaze, and add brief nods while listening.")
+    }
+
+    bullets.push(`Samples analyzed: ${summary.samples} frames.`)
+    return bullets
+  }, [computeSummary])
+
   // End call handler
-  const endCall = () => {
+  const endCall = async () => {
+    // Stop any ongoing recording
+    stopRecording()
+
+    // Stop screen share if active
+    if (isScreenSharing) {
+      await stopScreenShare()
+    }
+
     if (localStream) {
       localStream.getTracks().forEach((track) => track.stop())
     }
@@ -473,13 +533,19 @@ export function InterviewInterface() {
       )
       socket.close()
     }
-    router.push("/")
+    setIsAudioOn(false)
+    setIsVideoOn(false)
+    setBehaviorEnabled(false)
+
+    const advice = buildBehaviorAdvice()
+    setBehaviorAdvice(advice)
+    setShowConversation(true)
   }
 
   return (
     <div
       ref={containerRef}
-      className="fixed inset-0 w-screen h-screen bg-background flex flex-col"
+      className="fixed inset-0 w-screen h-screen bg-background flex flex-col overflow-y-auto pb-32"
     >
       {/* Navbar */}
       <nav className="w-full py-3 px-6 bg-background/80 backdrop-blur-md border-b border-border z-20">
@@ -692,6 +758,19 @@ export function InterviewInterface() {
           <div className="px-3 py-1.5 rounded-full bg-muted/80 backdrop-blur-sm border border-border text-sm font-medium">
             <span className="text-muted-foreground">AI Interview</span>
           </div>
+          {behaviorEnabled && (
+            <div
+              className={`px-3 py-1.5 rounded-full backdrop-blur-sm border text-sm font-medium ${
+                behaviorRunning
+                  ? "bg-primary/15 border-primary/60 text-primary"
+                  : "bg-muted/80 border-border text-muted-foreground"
+              }`}
+            >
+              {behaviorRunning
+                ? `Analyzing cues${lastSnapshot ? ` • Engaged ${(lastSnapshot.engagement * 100).toFixed(0)}%` : ""}`
+                : "Behavioral analysis ready"}
+            </div>
+          )}
           {!isVideoOn && (
             <div className="px-3 py-1.5 rounded-full bg-destructive/20 backdrop-blur-sm border border-destructive text-sm font-medium text-destructive">
               Camera Off
@@ -722,6 +801,15 @@ export function InterviewInterface() {
                 </p>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <Switch id="behavior-analysis" checked={behaviorEnabled} onCheckedChange={setBehaviorEnabled} />
+                    <Label htmlFor="behavior-analysis" className="text-sm">
+                      Process video locally for behavioral advice
+                    </Label>
+                  </div>
+                  {behaviorError && <p className="text-xs text-destructive">{behaviorError}</p>}
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="job-description">Job description</Label>
                   <Textarea
@@ -787,6 +875,15 @@ export function InterviewInterface() {
               <Volume2 className="w-4 h-4" />
               FastAPI backend: {backendUrl}
             </div>
+            {behaviorEnabled && (
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Video className="w-4 h-4" />
+                Behavioral signals:{" "}
+                {behaviorRunning
+                  ? `Sampling… engagement ${(lastSnapshot?.engagement ?? 0).toFixed(2)}`
+                  : "Idle"}
+              </div>
+            )}
             <div className="max-h-48 overflow-y-auto space-y-3 pr-2">
               {messages.length === 0 && (
                 <div className="text-sm text-muted-foreground border border-dashed border-border rounded-xl p-4">
@@ -825,6 +922,30 @@ export function InterviewInterface() {
             )}
           </CardContent>
         </Card>
+            {behaviorAdvice && (
+              <Card className="bg-background/80 border border-border">
+                <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-lg">Behavioral advice</CardTitle>
+                    <p className="text-sm text-muted-foreground">
+                      Generated locally from facial cues at the end of the interview.
+                    </p>
+                  </div>
+                  {behaviorSummary?.samples ? (
+                    <p className="text-xs text-muted-foreground">
+                      Samples analyzed: {behaviorSummary.samples}
+                    </p>
+                  ) : null}
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <ul className="list-disc pl-5 space-y-1 text-sm text-foreground">
+                    {behaviorAdvice.map((item, idx) => (
+                      <li key={idx}>{item}</li>
+                    ))}
+                  </ul>
+                </CardContent>
+              </Card>
+            )}
           </div>
       </div>
       )}
