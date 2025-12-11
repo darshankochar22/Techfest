@@ -17,9 +17,9 @@ Pointer provides a mock-interview experience with voice: the frontend captures a
 
 ## Setup instructions
 
-- Prereqs: Node.js 18+, Python 3.12+, `ffmpeg` on PATH.
-- Frontend deps: `npm install`
-- Backend deps: create `backend/.env` with `GROQ_API_KEY=...`, then `pip install -r backend/requirements.txt`
+- Prereqs: install Node.js 18+, Python 3.12+, and `ffmpeg` (on PATH).
+- Frontend deps: from repo root run `npm install`.
+- Backend deps: create `backend/.env` with `GROQ_API_KEY=...`, then run `pip install -r backend/requirements.txt` inside an activated virtualenv.
 
 ## Architecture overview
 
@@ -27,18 +27,64 @@ Pointer provides a mock-interview experience with voice: the frontend captures a
 - Backend: FastAPI (`backend/conversation.py` / `backend/conversation_realtime.py`) using Whisper (base) STT, Groq LLM, coqui-tts for speech.
 - Data flow: browser records → upload chunk → backend transcribes → LLM reply → TTS wav → frontend plays audio.
 
-## How to run locally
+## How to run locally (step by step)
 
-- Frontend: `npm run dev` (http://localhost:3000). Optionally set `NEXT_PUBLIC_WS_URL` for custom signaling.
-- Signaling (optional, recommended): `node server/websocket-server.js`
-- Backend: from repo root,
-  ```bash
-  python -m venv .venv
-  source .venv/bin/activate
-  echo "GROQ_API_KEY=your_key" > backend/.env
-  pip install -r backend/requirements.txt
-  uvicorn backend.conversation:app --reload --port 8000
-  ```
+### Frontend (Next.js)
+
+1. From repo root, install once:
+
+```bash
+npm install
+```
+
+2. (Optional) If you use an external signaling server, set:
+
+```bash
+export NEXT_PUBLIC_WS_URL=ws://localhost:3001
+```
+
+3. Start the dev server:
+
+```bash
+npm run dev
+```
+
+4. Open http://localhost:3000 in your browser.
+
+### Signaling server (optional but recommended)
+
+```bash
+node server/websocket-server.js
+```
+
+If not running this, the app falls back to the API polling routes under `app/api/webrtc/*`.
+
+### Backend (FastAPI)
+
+1. Create and activate a virtualenv:
+
+```bash
+python -m venv .venv
+source .venv/bin/activate
+```
+
+2. Add your API key:
+
+```bash
+echo "GROQ_API_KEY=your_key" > backend/.env
+```
+
+3. Install backend deps:
+
+```bash
+pip install -r backend/requirements.txt
+```
+
+4. Run the API:
+
+```bash
+uvicorn backend.conversation:app --reload --port 8000
+```
 
 ## APIs or endpoints
 
