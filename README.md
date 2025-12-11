@@ -1,6 +1,6 @@
 <!-- Project README -->
 
-# Pointer AI Landing Page
+# Pointer: AI Interviewer
 
 Project overview, setup, and run instructions for the Pointer AI landing page and demo backend. A more detailed 2-page writeup lives at `docs/technical-summary.pdf`.
 
